@@ -2,10 +2,10 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { CalendarPlus, Check, GripVertical, Minus, Play, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
+import { CalendarPlus, Check, ChevronRight, GripVertical, Minus, Play, Plus, Save, Sparkles, Trash2 } from 'lucide-react'
 import { dateKey, formatClock, formatCountdown, formatDuration, formatHhmm, plural, timeOnDay } from '../../shared/office'
 import { finishedTaskIds, MINUTE, remainingMs } from '../../shared/timer'
-import { IDLE_TIMER, TASK_COLORS, type AppState, type HistoryEntry, type Task } from '../../shared/types'
+import { IDLE_TIMER, TASK_COLORS, type AppState, type Task } from '../../shared/types'
 import { buildSchedule, type Slot } from './schedule'
 
 const QUICK_MINUTES = [15, 25, 30, 45, 60, 90]
@@ -16,11 +16,12 @@ interface TodayPageProps {
   /** The day being planned: today or a future day. */
   date: string
   onPickDate: (date: string) => void
+  onSeeCompleted: () => void
   state: AppState
   now: number
 }
 
-export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
+export function TodayPage({ date, onPickDate, onSeeCompleted, state, now }: TodayPageProps) {
   const isToday = date === state.plan.date
   const savedTasks = isToday ? state.plan.tasks : (state.futurePlans[date] ?? NO_TASKS)
   const [draft, setDraft] = useState<Task[]>(savedTasks)
@@ -195,14 +196,18 @@ export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
       </section>
 
       {isToday && state.plan.history.length > 0 && (
-        <section className="mt-8">
-          <h2 className="mb-2.5 text-[12px] font-semibold tracking-[0.12em] text-ink-400 uppercase">Completed</h2>
-          <div className="flex flex-col gap-1.5">
-            {[...state.plan.history].reverse().map((entry) => (
-              <DoneRow key={entry.taskId} entry={entry} />
-            ))}
-          </div>
-        </section>
+        <button
+          onClick={onSeeCompleted}
+          className="mt-5 flex h-11 w-full items-center gap-2.5 rounded-xl border border-ink-800 px-4 text-[13px] text-ink-400 transition hover:border-ink-700 hover:text-ink-100"
+        >
+          <span className="grid size-5 place-items-center rounded-full bg-mint/15 text-mint">
+            <Check size={12} strokeWidth={3} />
+          </span>
+          {plural(state.plan.history.length, 'task')} completed today
+          <span className="ml-auto flex items-center gap-0.5 font-medium text-accent-soft">
+            See all <ChevronRight size={14} />
+          </span>
+        </button>
       )}
     </div>
   )
@@ -435,29 +440,6 @@ function AddTask({ defaultMinutes, onAdd }: { defaultMinutes: number; onAdd: (ti
         <b className="text-ink-300">Save plan</b> (or <b className="text-ink-300">Save & start</b>).
       </p>
     </form>
-  )
-}
-
-function DoneRow({ entry }: { entry: HistoryEntry }) {
-  const overMs = entry.actualMs - entry.plannedMinutes * MINUTE
-  return (
-    <div className="flex h-11 items-center gap-3 rounded-xl bg-ink-850/60 px-3.5">
-      <span className="grid size-5 place-items-center rounded-full" style={{ background: `${entry.color}33`, color: entry.color }}>
-        <Check size={12} strokeWidth={3} />
-      </span>
-      <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink-300">{entry.title}</span>
-      <span className="text-[12px] text-ink-500">
-        {entry.actualMs === 0 ? (
-          'marked done'
-        ) : (
-          <>
-            planned {formatDuration(entry.plannedMinutes * MINUTE)} · took{' '}
-            <span className={overMs > MINUTE ? 'text-warn' : 'text-mint'}>{formatDuration(entry.actualMs)}</span>
-          </>
-        )}
-      </span>
-      <span className="tabular w-[70px] text-right text-[12px] text-ink-500">{formatClock(entry.finishedAt)}</span>
-    </div>
   )
 }
 

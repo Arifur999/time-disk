@@ -1,20 +1,24 @@
 import { useState } from 'react'
-import { CalendarCheck, History, Settings as SettingsIcon, Timer } from 'lucide-react'
+import { CalendarCheck, CheckCircle2, History, ListTodo, Settings as SettingsIcon, Timer } from 'lucide-react'
 import { formatCountdown } from '../../shared/office'
-import { currentTask, remainingMs } from '../../shared/timer'
+import { currentTask, remainingMs, upcomingTasks } from '../../shared/timer'
 import { useAppState, useNow } from '../lib/hooks'
+import { CompletedPage } from './CompletedPage'
 import { HistoryPage } from './HistoryPage'
+import { PendingPage } from './PendingPage'
 import { SettingsPage } from './SettingsPage'
 import { TodayPage } from './TodayPage'
 import icon from '../../../resources/icon.png'
 
 const PAGES = [
   { id: 'today', label: 'Plan', Icon: CalendarCheck },
+  { id: 'pending', label: 'Pending', Icon: ListTodo },
+  { id: 'completed', label: 'Completed', Icon: CheckCircle2 },
   { id: 'history', label: 'History', Icon: History },
   { id: 'settings', label: 'Settings', Icon: SettingsIcon }
 ] as const
 
-type PageId = (typeof PAGES)[number]['id']
+export type PageId = (typeof PAGES)[number]['id']
 
 export function App() {
   const state = useAppState()
@@ -26,6 +30,17 @@ export function App() {
   const task = currentTask(state.plan, state.timer)
   // Never show a day that has already passed (e.g. after midnight).
   const planDate = pickedDate > state.plan.date ? pickedDate : state.plan.date
+
+  const pendingCount =
+    upcomingTasks(state.plan, state.timer).length +
+    (task ? 1 : 0) +
+    Object.values(state.futurePlans).reduce((sum, tasks) => sum + tasks.length, 0)
+  const counts: Partial<Record<PageId, number>> = { pending: pendingCount, completed: state.plan.history.length }
+
+  function openDay(date: string) {
+    setPickedDate(date)
+    setPage('today')
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -45,7 +60,12 @@ export function App() {
               }`}
             >
               <Icon size={17} className={page === id ? 'text-accent-soft' : ''} />
-              {label}
+              <span className="flex-1 text-left">{label}</span>
+              {!!counts[id] && (
+                <span className="tabular rounded-full bg-ink-700 px-2 py-px text-[11.5px] font-semibold text-ink-300">
+                  {counts[id]}
+                </span>
+              )}
             </button>
           ))}
 
@@ -74,8 +94,17 @@ export function App() {
 
         <main className="min-w-0 flex-1 overflow-y-auto rounded-tl-2xl border-t border-l border-ink-800 bg-ink-900">
           {page === 'today' && (
-            <TodayPage key={planDate} date={planDate} onPickDate={setPickedDate} state={state} now={now} />
+            <TodayPage
+              key={planDate}
+              date={planDate}
+              onPickDate={setPickedDate}
+              onSeeCompleted={() => setPage('completed')}
+              state={state}
+              now={now}
+            />
           )}
+          {page === 'pending' && <PendingPage state={state} now={now} onOpenDay={openDay} />}
+          {page === 'completed' && <CompletedPage state={state} />}
           {page === 'history' && <HistoryPage state={state} />}
           {page === 'settings' && <SettingsPage settings={state.settings} />}
         </main>
