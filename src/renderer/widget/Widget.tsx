@@ -55,7 +55,9 @@ export function Widget() {
 
 function Card({ alert, children }: { alert: boolean; children: ReactNode }) {
   return (
-    <div className="drag absolute inset-2 overflow-hidden rounded-[22px] border border-white/[0.07] bg-gradient-to-br from-[#1c2030]/[0.97] to-[#111319]/[0.97]">
+    <div
+      onPointerDown={dragOrClick(() => {})}
+      className="absolute inset-2 cursor-grab overflow-hidden rounded-[22px] border border-white/[0.07] bg-gradient-to-br from-[#1c2030]/[0.97] to-[#111319]/[0.97]">
       <div className={`absolute inset-0 rounded-[22px] ${alert ? 'animate-pulse-glow' : ''}`} />
       <div className="relative h-full">{children}</div>
     </div>
@@ -96,7 +98,7 @@ function ActiveTask({ state, task, now }: { state: AppState; task: Task; now: nu
         </p>
 
         {timeUp ? (
-          <div className="no-drag mt-2.5 flex gap-2">
+          <div className="mt-2.5 flex gap-2">
             <button
               onClick={() => api().timer('addFive')}
               className="flex h-8 shrink-0 items-center gap-0.5 rounded-full bg-white/10 px-2.5 text-[12px] font-semibold whitespace-nowrap hover:bg-white/15"
@@ -111,7 +113,7 @@ function ActiveTask({ state, task, now }: { state: AppState; task: Task; now: nu
             </button>
           </div>
         ) : (
-          <div className="no-drag mt-2.5 flex gap-1.5">
+          <div className="mt-2.5 flex gap-1.5">
             <PillButton title={paused ? 'Resume' : 'Pause'} onClick={() => api().timer(paused ? 'resume' : 'pause')}>
               {paused ? <Play size={13} /> : <Pause size={13} />}
             </PillButton>
@@ -169,7 +171,7 @@ function IdleView({ state }: { state: AppState }) {
       <p className="mt-1 truncate text-[12px] text-ink-400">{detail}</p>
       <button
         onClick={action.run}
-        className="no-drag mt-3 flex h-8 w-fit items-center gap-1.5 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white hover:bg-accent-soft"
+        className="mt-3 flex h-8 w-fit items-center gap-1.5 rounded-full bg-accent px-4 text-[12.5px] font-semibold text-white hover:bg-accent-soft"
       >
         {action.label === 'Start' && <Play size={13} />} {action.label}
       </button>
@@ -178,11 +180,12 @@ function IdleView({ state }: { state: AppState }) {
 }
 
 /**
- * Drag by hand instead of a CSS drag region, because a drag region
- * swallows clicks and the small clock must open on click.
+ * Drag the widget by hand. A CSS drag region (-webkit-app-region) is not
+ * used because on Windows it swallows clicks on buttons inside it.
  */
 function dragOrClick(onClick: () => void) {
   return (event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return
     const target = event.currentTarget
     target.setPointerCapture(event.pointerId)
     const start = { x: event.screenX, y: event.screenY, windowX: window.screenX, windowY: window.screenY }
@@ -303,7 +306,7 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
     <button
       title={title}
       onClick={onClick}
-      className="no-drag grid size-7 place-items-center rounded-full text-ink-400 transition hover:bg-white/10 hover:text-ink-100"
+      className="grid size-7 place-items-center rounded-full text-ink-400 transition hover:bg-white/10 hover:text-ink-100"
     >
       {children}
     </button>
