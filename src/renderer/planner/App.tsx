@@ -63,9 +63,12 @@ export function App() {
             ) : (
               <p className="text-[12.5px] text-ink-400">No task running right now.</p>
             )}
-            <p className="mt-2 flex items-center gap-1.5 text-[11.5px] text-ink-500">
-              <Timer size={12} /> Timer lives in the tray
-            </p>
+            <button
+              onClick={() => window.api.showWidget()}
+              className="mt-3 flex h-8 w-full items-center justify-center gap-1.5 rounded-lg bg-ink-800 text-[12.5px] font-semibold text-ink-300 transition hover:bg-ink-700 hover:text-ink-100"
+            >
+              <Timer size={14} /> Show timer
+            </button>
           </div>
         </nav>
 

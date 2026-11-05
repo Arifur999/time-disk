@@ -17,7 +17,10 @@ const api: DesktopApi = {
   saveSettings: (patch) => ipcRenderer.invoke(IPC.saveSettings, patch),
   openPlanner: () => ipcRenderer.send(IPC.openPlanner),
   setWidgetCollapsed: (collapsed) => ipcRenderer.send(IPC.widgetCollapsed, collapsed),
-  hideWidget: () => ipcRenderer.send(IPC.hideWidget)
+  hideWidget: () => ipcRenderer.send(IPC.hideWidget),
+  showWidget: () => ipcRenderer.send(IPC.showWidget),
+  moveWidget: (x, y, done) => ipcRenderer.send(IPC.moveWidget, x, y, done),
+  completeTask: (taskId) => ipcRenderer.invoke(IPC.completeTask, taskId)
 }
 
 contextBridge.exposeInMainWorld('api', api)

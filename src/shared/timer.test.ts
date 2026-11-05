@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyAction, currentTask, MINUTE, nextTask, pauseAt, remainingMs, tick } from './timer'
+import { applyAction, completeTask, currentTask, MINUTE, nextTask, pauseAt, remainingMs, tick } from './timer'
 import { IDLE_TIMER, type DayPlan } from './types'
 
 const plan: DayPlan = {
@@ -62,6 +62,20 @@ describe('timer engine', () => {
     day = applyAction(day, 'next', T0 + 3 * MINUTE)
     expect(day.timer.status).toBe('done')
     expect(day.plan.history.map((h) => h.taskId)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('completes a task that is not running without touching the timer', () => {
+    const day = started()
+    const after = completeTask(day, 'c', T0 + MINUTE)
+    expect(after.plan.history.map((h) => [h.taskId, h.actualMs])).toEqual([['c', 0]])
+    expect(after.timer).toBe(day.timer)
+    expect(nextTask(after.plan, after.timer)?.id).toBe('b')
+  })
+
+  it('completing the running task moves on to the next one', () => {
+    const after = completeTask(started(), 'a', T0 + 5 * MINUTE)
+    expect(after.plan.history[0].actualMs).toBe(5 * MINUTE)
+    expect(currentTask(after.plan, after.timer)?.id).toBe('b')
   })
 
   it('pauses as of the moment the PC went off', () => {

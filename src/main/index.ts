@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, Menu, nativeImage, Notification, powerMonitor, Tray } from 'electron'
 import { IPC } from '../shared/api'
 import { dateKey, formatHhmm, officePhase, plural, type OfficePhase } from '../shared/office'
-import { applyAction, currentTask, nextTask, pauseAt, tick, upcomingTasks } from '../shared/timer'
+import { applyAction, completeTask, currentTask, nextTask, pauseAt, tick, upcomingTasks } from '../shared/timer'
 import { IDLE_TIMER, type AppState, type Settings, type Task, type TimerAction } from '../shared/types'
 import { loadData, rollOverDay, saveData, type StoredData } from './store'
 import { createPlannerWindow, createWidgetWindow, defaultWidgetPosition, WIDGET_SIZE } from './windows'
@@ -93,6 +93,15 @@ function showWidget(): void {
   widget.moveTop()
 }
 
+let hideTipShown = false
+
+function hideWidget(): void {
+  widget?.hide()
+  if (hideTipShown) return
+  hideTipShown = true
+  notify('Timer hidden', 'Click the Office Focus Timer icon in the taskbar tray (near the clock) to show it again.')
+}
+
 function setWidgetCollapsed(collapsed: boolean): void {
   if (!widget) return
   const size = collapsed ? WIDGET_SIZE.collapsed : WIDGET_SIZE.expanded
@@ -134,7 +143,7 @@ function refreshTray(): void {
       { type: 'separator' },
       { label: 'Pause', visible: status === 'running', click: () => runTimerAction('pause') },
       { label: 'Resume', visible: status === 'paused', click: () => runTimerAction('resume') },
-      { label: 'Start next task', visible: !!task, click: () => runTimerAction('next') },
+      { label: 'Complete current task', visible: !!task, click: () => runTimerAction('next') },
       { type: 'separator' },
       { label: 'Quit', click: () => app.quit() }
     ])
@@ -257,7 +266,16 @@ function registerIpc(): void {
   ipcMain.handle(IPC.saveSettings, (_event, patch: Partial<Settings>) => saveSettings(patch))
   ipcMain.on(IPC.openPlanner, showPlanner)
   ipcMain.on(IPC.widgetCollapsed, (_event, collapsed: boolean) => setWidgetCollapsed(collapsed))
-  ipcMain.on(IPC.hideWidget, () => widget?.hide())
+  ipcMain.handle(IPC.completeTask, (_event, taskId: string) => {
+    const { plan, timer } = completeTask(data, taskId, Date.now())
+    commit({ plan, timer })
+  })
+  ipcMain.on(IPC.hideWidget, hideWidget)
+  ipcMain.on(IPC.showWidget, showWidget)
+  ipcMain.on(IPC.moveWidget, (_event, x: number, y: number, done: boolean) => {
+    widget?.setPosition(Math.round(x), Math.round(y))
+    if (done) commit({ widgetPosition: { x: Math.round(x), y: Math.round(y) } })
+  })
 }
 
 // ---------- lifecycle ----------

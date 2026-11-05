@@ -60,6 +60,11 @@ export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
     if (andStart) await window.api.timer('start')
   }
 
+  async function complete(taskId: string) {
+    if (dirty) await save()
+    await window.api.completeTask(taskId)
+  }
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.ctrlKey && event.key.toLowerCase() === 's') {
@@ -106,11 +111,15 @@ export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {dirty && <span className="mr-1 text-[12px] text-warn">● Unsaved changes</span>}
+          {dirty && <span className="mr-1 text-[12px] text-warn">● Not saved yet</span>}
           <button
             onClick={() => save()}
             disabled={!dirty}
-            className="flex h-9 items-center gap-2 rounded-xl border border-ink-700 px-3.5 text-[13px] font-semibold text-ink-300 transition enabled:hover:bg-ink-800 enabled:hover:text-ink-100 disabled:opacity-40"
+            className={`flex h-9 items-center gap-2 rounded-xl px-3.5 text-[13px] font-semibold transition disabled:opacity-40 ${
+              dirty
+                ? 'bg-warn text-ink-950 hover:brightness-110'
+                : 'border border-ink-700 text-ink-300'
+            }`}
           >
             <Save size={15} /> Save plan
           </button>
@@ -153,8 +162,17 @@ export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
         )}
       </div>
 
+      <AddTask defaultMinutes={state.settings.defaultMinutes} onAdd={addTask} />
+
       <section className="mt-7">
-        <h2 className="mb-2.5 text-[12px] font-semibold tracking-[0.12em] text-ink-400 uppercase">Plan</h2>
+        <h2 className="mb-2.5 flex items-baseline justify-between text-[12px] font-semibold tracking-[0.12em] text-ink-400 uppercase">
+          Task list
+          {upcoming.length > 1 && (
+            <span className="text-[11.5px] font-normal tracking-normal text-ink-500 normal-case">
+              Drag ⋮⋮ to change the order · use − + to change the minutes
+            </span>
+          )}
+        </h2>
         <div className="flex flex-col gap-2">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={upcoming.map((task) => task.id)} strategy={verticalListSortingStrategy}>
@@ -167,12 +185,12 @@ export function TodayPage({ date, onPickDate, state, now }: TodayPageProps) {
                   remaining={task.id === state.timer.currentTaskId ? remainingMs(task, state.timer, now) : null}
                   onChange={(patch) => updateTask(task.id, patch)}
                   onDelete={() => edit(draft.filter((other) => other.id !== task.id))}
+                  onComplete={isToday ? () => complete(task.id) : undefined}
                 />
               ))}
             </SortableContext>
           </DndContext>
           {upcoming.length === 0 && <EmptyPlan />}
-          <AddTask defaultMinutes={state.settings.defaultMinutes} onAdd={addTask} />
         </div>
       </section>
 
@@ -277,9 +295,11 @@ interface TaskRowProps {
   remaining: number | null
   onChange: (patch: Partial<Task>) => void
   onDelete: () => void
+  /** Only today's tasks can be completed. */
+  onComplete?: () => void
 }
 
-function TaskRow({ task, slot, isCurrent, remaining, onChange, onDelete }: TaskRowProps) {
+function TaskRow({ task, slot, isCurrent, remaining, onChange, onDelete, onComplete }: TaskRowProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
   const nextColor = TASK_COLORS[(TASK_COLORS.indexOf(task.color) + 1) % TASK_COLORS.length]
 
@@ -309,11 +329,20 @@ function TaskRow({ task, slot, isCurrent, remaining, onChange, onDelete }: TaskR
         <span className="rounded-full bg-accent px-2 py-0.5 text-[10.5px] font-bold tracking-wider text-white uppercase">Now</span>
       )}
       <MinutesStepper value={task.minutes} onChange={(minutes) => onChange({ minutes })} />
-      <span className="tabular w-[150px] text-right text-[12.5px] text-ink-400">
+      <span className="tabular w-[136px] text-right text-[12.5px] text-ink-400">
         {isCurrent && remaining !== null
           ? `${formatCountdown(remaining)} left`
           : slot && `${formatClock(slot.start)} – ${formatClock(slot.end)}`}
       </span>
+      {onComplete && (
+        <button
+          title="Mark this task as complete"
+          onClick={onComplete}
+          className="flex h-8 items-center gap-1 rounded-lg bg-mint/10 px-2.5 text-[12px] font-semibold text-mint transition hover:bg-mint/20"
+        >
+          <Check size={14} strokeWidth={3} /> Done
+        </button>
+      )}
       <button
         title="Delete task"
         onClick={onDelete}
@@ -357,40 +386,54 @@ function AddTask({ defaultMinutes, onAdd }: { defaultMinutes: number; onAdd: (ti
   }
 
   return (
-    <form onSubmit={submit} className="rounded-2xl border border-dashed border-ink-700 bg-ink-900 p-2">
-      <div className="flex items-center gap-2">
-        <span className="grid size-8 place-items-center text-accent-soft">
-          <Plus size={18} />
+    <form onSubmit={submit} className="mt-6 rounded-2xl border border-accent/25 bg-gradient-to-br from-accent/[0.07] to-transparent p-4">
+      <p className="flex items-center gap-2 text-[14.5px] font-semibold">
+        <span className="grid size-6 place-items-center rounded-lg bg-accent text-white">
+          <Plus size={15} strokeWidth={3} />
         </span>
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          placeholder="Add a task — e.g. Reply to client emails"
-          className="min-w-0 flex-1 bg-transparent py-2 text-[14.5px] outline-none placeholder:text-ink-500"
-        />
-        <MinutesStepper value={minutes} onChange={setMinutes} />
-        <button
-          type="submit"
-          disabled={!title.trim()}
-          className="h-8 rounded-lg bg-ink-700 px-3.5 text-[13px] font-semibold transition enabled:hover:bg-accent disabled:opacity-40"
-        >
-          Add
-        </button>
-      </div>
-      <div className="mt-1.5 flex gap-1.5 pl-10">
+        Add a new task
+      </p>
+
+      <label className="mt-3.5 block text-[12px] font-medium text-ink-400" htmlFor="new-task-title">
+        1. What will you work on?
+      </label>
+      <input
+        id="new-task-title"
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        placeholder="e.g. Reply to client emails"
+        className="mt-1.5 h-11 w-full rounded-xl border border-ink-700 bg-ink-950 px-3.5 text-[14.5px] outline-none placeholder:text-ink-500 focus:border-accent"
+      />
+
+      <p className="mt-3.5 text-[12px] font-medium text-ink-400">2. How long will it take?</p>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
         {QUICK_MINUTES.map((option) => (
           <button
             type="button"
             key={option}
             onClick={() => setMinutes(option)}
-            className={`rounded-full px-2.5 py-0.5 text-[11.5px] font-medium transition ${
-              minutes === option ? 'bg-accent/20 text-accent-soft' : 'text-ink-500 hover:bg-ink-800 hover:text-ink-300'
+            className={`h-8 rounded-lg px-3 text-[12.5px] font-semibold transition ${
+              minutes === option ? 'bg-accent text-white' : 'bg-ink-800 text-ink-300 hover:bg-ink-700'
             }`}
           >
             {formatDuration(option * MINUTE)}
           </button>
         ))}
+        <span className="mx-1 text-[12px] text-ink-500">or</span>
+        <MinutesStepper value={minutes} onChange={setMinutes} />
+
+        <button
+          type="submit"
+          disabled={!title.trim()}
+          className="ml-auto flex h-10 items-center gap-1.5 rounded-xl bg-accent px-5 text-[13.5px] font-semibold text-white transition hover:bg-accent-soft disabled:opacity-40"
+        >
+          <Plus size={16} strokeWidth={3} /> Add task
+        </button>
       </div>
+      <p className="mt-3 text-[11.5px] text-ink-500">
+        Tip: press <b className="text-ink-300">Enter</b> to add quickly. New tasks go to the list below — then press{' '}
+        <b className="text-ink-300">Save plan</b> (or <b className="text-ink-300">Save & start</b>).
+      </p>
     </form>
   )
 }
@@ -404,8 +447,14 @@ function DoneRow({ entry }: { entry: HistoryEntry }) {
       </span>
       <span className="min-w-0 flex-1 truncate text-[13.5px] text-ink-300">{entry.title}</span>
       <span className="text-[12px] text-ink-500">
-        planned {formatDuration(entry.plannedMinutes * MINUTE)} · took{' '}
-        <span className={overMs > MINUTE ? 'text-warn' : 'text-mint'}>{formatDuration(entry.actualMs)}</span>
+        {entry.actualMs === 0 ? (
+          'marked done'
+        ) : (
+          <>
+            planned {formatDuration(entry.plannedMinutes * MINUTE)} · took{' '}
+            <span className={overMs > MINUTE ? 'text-warn' : 'text-mint'}>{formatDuration(entry.actualMs)}</span>
+          </>
+        )}
       </span>
       <span className="tabular w-[70px] text-right text-[12px] text-ink-500">{formatClock(entry.finishedAt)}</span>
     </div>
@@ -419,10 +468,10 @@ function EmptyPlan() {
         <Sparkles size={20} />
       </span>
       <div>
-        <p className="text-[14.5px] font-semibold">Plan your day</p>
+        <p className="text-[14.5px] font-semibold">No tasks yet</p>
         <p className="mt-0.5 text-[13px] text-ink-400">
-          Add tasks with how long each should take, drag to order them, then press <b className="text-ink-300">Save & start</b>.
-          The little timer on the side of your screen will walk you through them.
+          Use <b className="text-ink-300">Add a new task</b> above. When your list is ready, press{' '}
+          <b className="text-ink-300">Save & start</b> and the little timer on the side of your screen will walk you through it.
         </p>
       </div>
     </div>

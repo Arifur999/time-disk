@@ -102,6 +102,18 @@ export function applyAction(day: Day, action: TimerAction, now: number): Day {
   }
 }
 
+/**
+ * Marks any task done. The running task finishes like "next"; a task that
+ * never ran is recorded with no time spent and the timer is left alone.
+ */
+export function completeTask(day: Day, taskId: string, now: number): Day {
+  if (taskId === day.timer.currentTaskId) return applyAction(day, 'next', now)
+  const task = day.plan.tasks.find((candidate) => candidate.id === taskId)
+  if (!task || finishedTaskIds(day.plan).has(taskId)) return day
+  const entry = { taskId, title: task.title, color: task.color, plannedMinutes: task.minutes, actualMs: 0, finishedAt: now }
+  return { plan: { ...day.plan, history: [...day.plan.history, entry] }, timer: day.timer }
+}
+
 /** Pauses as of `at`, e.g. when the PC went to sleep or was switched off. */
 export function pauseAt(timer: TimerState, at: number): TimerState {
   if (timer.status !== 'running' && timer.status !== 'timeUp') return timer

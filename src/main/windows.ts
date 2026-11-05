@@ -4,7 +4,8 @@ import icon from '../../resources/icon.png?asset'
 
 export const WIDGET_SIZE = {
   expanded: { width: 348, height: 176 },
-  collapsed: { width: 212, height: 56 }
+  /** The small round clock. */
+  collapsed: { width: 100, height: 100 }
 }
 
 const EDGE_GAP = 12

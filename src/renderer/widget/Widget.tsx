@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, LayoutList, Pause, Play, Plus, SkipForward, X } from 'lucide-react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { Check, LayoutList, Minus, Pause, Play, Plus, Timer, X } from 'lucide-react'
 import { formatCountdown, formatDuration, formatHhmm, officePhase, plural } from '../../shared/office'
 import { currentTask, elapsedMs, MINUTE, nextTask, remainingMs, totalMs, upcomingTasks } from '../../shared/timer'
 import type { AppState, Task } from '../../shared/types'
@@ -33,7 +33,7 @@ export function Widget() {
   if (!state) return null
   const task = currentTask(state.plan, state.timer)
 
-  if (collapsed) return <Pill state={state} task={task} now={now} onExpand={() => toggleCollapsed(false)} />
+  if (collapsed) return <ClockBubble state={state} task={task} now={now} onExpand={() => toggleCollapsed(false)} />
 
   return (
     <Card alert={state.timer.status === 'timeUp'}>
@@ -41,10 +41,10 @@ export function Widget() {
         <IconButton title="Open planner" onClick={() => api().openPlanner()}>
           <LayoutList size={14} />
         </IconButton>
-        <IconButton title="Make small" onClick={() => toggleCollapsed(true)}>
-          <ChevronDown size={15} />
+        <IconButton title="Minimize to a small clock" onClick={() => toggleCollapsed(true)}>
+          <Minus size={15} />
         </IconButton>
-        <IconButton title="Hide (open again from the tray)" onClick={() => api().hideWidget()}>
+        <IconButton title="Hide the timer (show it again from the tray icon)" onClick={() => api().hideWidget()}>
           <X size={14} />
         </IconButton>
       </div>
@@ -107,7 +107,7 @@ function ActiveTask({ state, task, now }: { state: AppState; task: Task; now: nu
               onClick={() => api().timer('next')}
               className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full bg-accent px-2.5 text-[12px] font-semibold whitespace-nowrap text-white hover:bg-accent-soft"
             >
-              {following ? 'Start next' : 'Finish day'} <SkipForward size={13} />
+<Check size={13} strokeWidth={3} /> {following ? 'Done, next' : 'Done'}
             </button>
           </div>
         ) : (
@@ -116,11 +116,15 @@ function ActiveTask({ state, task, now }: { state: AppState; task: Task; now: nu
               {paused ? <Play size={13} /> : <Pause size={13} />}
             </PillButton>
             <PillButton title="Add 5 minutes" onClick={() => api().timer('addFive')}>
-              <Plus size={13} /> 5
+              <Plus size={13} />5m
             </PillButton>
-            <PillButton title="Done, start next task" onClick={() => api().timer('next')}>
-              <SkipForward size={13} /> {following ? 'Next' : 'Done'}
-            </PillButton>
+            <button
+              title={following ? 'Task done: start the next one' : 'Task done'}
+              onClick={() => api().timer('next')}
+              className="flex h-7 items-center gap-1 rounded-full bg-mint/15 px-2.5 text-[11.5px] font-semibold text-mint transition hover:bg-mint/25"
+            >
+              <Check size={13} strokeWidth={3} /> Complete
+            </button>
           </div>
         )}
       </div>
@@ -173,24 +177,77 @@ function IdleView({ state }: { state: AppState }) {
   )
 }
 
-function Pill({ state, task, now, onExpand }: { state: AppState; task?: Task; now: number; onExpand: () => void }) {
-  const timeUp = state.timer.status === 'timeUp'
+/**
+ * Drag by hand instead of a CSS drag region, because a drag region
+ * swallows clicks and the small clock must open on click.
+ */
+function dragOrClick(onClick: () => void) {
+  return (event: ReactPointerEvent<HTMLElement>) => {
+    const target = event.currentTarget
+    target.setPointerCapture(event.pointerId)
+    const start = { x: event.screenX, y: event.screenY, windowX: window.screenX, windowY: window.screenY }
+    let moved = false
+    const position = (e: PointerEvent) => [start.windowX + e.screenX - start.x, start.windowY + e.screenY - start.y] as const
+
+    function onMove(e: PointerEvent) {
+      if (!moved && Math.hypot(e.screenX - start.x, e.screenY - start.y) < 4) return
+      moved = true
+      api().moveWidget(...position(e), false)
+    }
+    function onUp(e: PointerEvent) {
+      target.removeEventListener('pointermove', onMove)
+      target.removeEventListener('pointerup', onUp)
+      if (moved) api().moveWidget(...position(e), true)
+      else onClick()
+    }
+    target.addEventListener('pointermove', onMove)
+    target.addEventListener('pointerup', onUp)
+  }
+}
+
+function ClockBubble({ state, task, now, onExpand }: { state: AppState; task?: Task; now: number; onExpand: () => void }) {
+  const { timer } = state
+  const timeUp = timer.status === 'timeUp'
+  const progress = task ? Math.min(1, elapsedMs(timer, now) / totalMs(task, timer)) : 0
+  const color = timeUp ? 'var(--color-warn)' : (task?.color ?? 'var(--color-ink-500)')
+  const radius = 37
+  const circumference = 2 * Math.PI * radius
+
   return (
     <div
-      className={`drag absolute inset-1.5 flex items-center gap-2.5 rounded-full border border-white/[0.07] bg-[#161925]/[0.97] pr-1.5 pl-4 ${timeUp ? 'animate-pulse-glow' : ''}`}
+      title={task ? `${task.title} — click to open, drag to move` : 'Click to open, drag to move'}
+      onPointerDown={dragOrClick(onExpand)}
+      className={`absolute inset-1.5 grid cursor-pointer place-items-center rounded-full border border-white/[0.08] bg-[#151823]/[0.97] ${
+        timeUp ? 'animate-pulse-glow' : ''
+      } ${timer.status === 'paused' ? 'opacity-70' : ''}`}
     >
-      <span className="size-2.5 shrink-0 rounded-full" style={{ background: timeUp ? 'var(--color-warn)' : (task?.color ?? 'var(--color-ink-500)') }} />
+      <svg viewBox="0 0 88 88" className="absolute inset-0 size-full -rotate-90">
+        <circle cx="44" cy="44" r={radius} fill="none" stroke="rgb(255 255 255 / 0.07)" strokeWidth="5" />
+        <circle
+          cx="44"
+          cy="44"
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={circumference * (1 - (timeUp ? 1 : progress))}
+          style={{ transition: 'stroke-dashoffset 0.3s linear' }}
+        />
+      </svg>
       {task ? (
-        <>
-          <span className="tabular text-[15px] font-semibold">{formatCountdown(remainingMs(task, state.timer, now))}</span>
-          <span className="min-w-0 flex-1 truncate text-[11.5px] text-ink-400">{task.title}</span>
-        </>
+        <div className="relative flex flex-col items-center leading-none">
+          <span className={`tabular text-[15px] font-semibold ${timeUp ? 'text-warn' : ''}`}>
+            {formatCountdown(remainingMs(task, timer, now))}
+          </span>
+          <span className="mt-1 text-[8.5px] font-semibold tracking-[0.12em] text-ink-400 uppercase">
+            {timeUp ? 'over' : timer.status === 'paused' ? 'paused' : 'left'}
+          </span>
+        </div>
       ) : (
-        <span className="flex-1 text-[12px] text-ink-300">No task running</span>
+        <Timer size={24} className="relative text-ink-300" />
       )}
-      <IconButton title="Expand" onClick={onExpand}>
-        <ChevronLeft size={15} />
-      </IconButton>
     </div>
   )
 }
@@ -234,7 +291,7 @@ function PillButton({ title, onClick, children }: { title: string; onClick: () =
     <button
       title={title}
       onClick={onClick}
-      className="flex h-7 items-center gap-1 rounded-full bg-white/[0.07] px-2.5 text-[11.5px] font-semibold text-ink-300 transition hover:bg-white/[0.14] hover:text-ink-100"
+      className="flex h-7 items-center gap-0.5 rounded-full bg-white/[0.07] px-2.5 text-[11.5px] font-semibold whitespace-nowrap text-ink-300 transition hover:bg-white/[0.14] hover:text-ink-100"
     >
       {children}
     </button>
